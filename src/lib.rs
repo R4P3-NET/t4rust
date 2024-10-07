@@ -142,12 +142,11 @@ pub fn transform_template(
 	let mut path: Option<String> = None;
 	let mut info = TemplateInfo::default();
 
-	for attr in macro_input.attrs {
-		let meta = attr.parse_meta().expect("Failed to parse t4 attribute");
-		match &meta {
+	for attr in &macro_input.attrs {
+		match &attr.meta {
 			NameValue(MetaNameValue {
 				path: p,
-				lit: Lit::Str(lit_str),
+				value: syn::Expr::Lit(ExprLit {attrs: _, lit: Lit::Str(lit_str)}),
 				..
 			}) => {
 				if p.get_ident().expect("Attribute with no name")
@@ -189,7 +188,14 @@ pub fn transform_template(
 	let read = read_from_file(path).expect("Could not read file");
 
 	// Parse template file
-	let mut data = parse_all(&mut info, &read).expect("Parse failed!");
+	let mut data = match parse_all(&mut info, &read) {
+		Ok(data) => data,
+		Err(e) => {
+			return syn::Error::new_spanned(macro_input, format!("Parse error: {}, reason: {}", e.index, e.reason))
+				.into_compile_error()
+				.into()
+		}
+	};
 
 	if info.debug_print {
 		debug_to_file(path, &data);
